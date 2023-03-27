@@ -1,40 +1,92 @@
+import * as dotenv from 'dotenv'
 import { ApolloServer } from '@apollo/server'
 import { startStandaloneServer } from '@apollo/server/standalone'
+import gql from 'graphql-tag'
+import mongoose from 'mongoose'
+import { TodoModel, Todo } from './models/todo.model'
+import { GraphQLError } from 'graphql'
 
-interface Todo {
-  id: number
-  name: string
-}
+dotenv.config()
+mongoose
+  .connect(process.env.MONGODB_URI as string)
+  .then(() => console.log('Connected to MongoDB'))
+  .catch((error) => console.log('Error connectiong to MongoDB:', error.message))
 
-const todos: Todo[] = [
-  {
-    id: 1,
-    name: 'Learn Typescript',
-  },
-  {
-    id: 2,
-    name: 'Learn GraphQL',
-  },
-  {
-    id: 3,
-    name: 'Implement a todo application with typescript and graphql',
-  },
-]
+const typeDefs = gql`
+  type Todo {
+    id: ID!
+    title: String!
+    description: String
+    priority: String
+  }
 
-const typeDefs = `
-    type Todo {
-        id: Int!
-        name: String!
-    }
+  type Query {
+    todos: [Todo!]!
+  }
 
-    type Query {
-        todos: [Todo!]!
-    }
+  type Mutation {
+    createTodo(title: String!, description: String, priority: String): Todo!
+    editTodo(
+      id: ID!
+      title: String
+      description: String
+      priority: String
+    ): Todo
+  }
 `
 
 const resolvers = {
   Query: {
-    todos: () => todos,
+    todos: async () => await TodoModel.find({}),
+  },
+  Mutation: {
+    createTodo: async (_: any, args: Todo) => {
+      const todo = new TodoModel({ ...args })
+      try {
+        await todo.save()
+      } catch (error) {
+        throw new GraphQLError('Failed to save todo.', {
+          extensions: {
+            error,
+          },
+        })
+      }
+      return todo
+    },
+    editTodo: async (
+      _: any,
+      args: {
+        id: String
+        title?: String
+        description?: String
+        priority?: String
+      }
+    ) => {
+      const todo = await TodoModel.findById(args.id)
+
+      if (!todo) {
+        throw new GraphQLError(`Todo with id: ${args.id} don't exists.`, {
+          extensions: { code: 'BAD_USER_INPUT' },
+        })
+      }
+
+      todo.title = args.title || todo.title
+      todo.description = args.description || todo.description
+      todo.priority = args.priority || todo.priority
+
+      try {
+        await todo.save()
+      } catch (error) {
+        throw new GraphQLError(`Failed to save modifications`, {
+          extensions: {
+            code: 'BAD_USER_INPUT',
+            error,
+          },
+        })
+      }
+
+      return todo
+    },
   },
 }
 
