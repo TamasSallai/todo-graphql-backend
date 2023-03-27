@@ -1,12 +1,12 @@
 import mongoose from 'mongoose'
 
-export interface Todo {
-  title: String
-  description?: String
-  priority?: String
+export interface TodoInput {
+  title: string
+  description?: string
+  priority?: string
 }
 
-export interface TodoDocument extends Todo, mongoose.Document {
+export interface TodoDocument extends TodoInput, mongoose.Document {
   createdAt: Date
   updatedAt: Date
 }

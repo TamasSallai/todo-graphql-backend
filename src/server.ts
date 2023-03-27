@@ -1,10 +1,12 @@
 import * as dotenv from 'dotenv'
 import { ApolloServer } from '@apollo/server'
 import { startStandaloneServer } from '@apollo/server/standalone'
+import { GraphQLError } from 'graphql'
 import gql from 'graphql-tag'
 import mongoose from 'mongoose'
-import { TodoModel, Todo } from './models/todo.model'
-import { GraphQLError } from 'graphql'
+import { TodoModel, TodoInput } from './models/todo.model'
+import { UserModel, UserInput } from './models/user.model'
+import jwt from 'jsonwebtoken'
 
 dotenv.config()
 mongoose
@@ -13,6 +15,17 @@ mongoose
   .catch((error) => console.log('Error connectiong to MongoDB:', error.message))
 
 const typeDefs = gql`
+  type User {
+    id: ID!
+    username: String!
+    email: String!
+    password: String!
+  }
+
+  type Token {
+    value: String!
+  }
+
   type Todo {
     id: ID!
     title: String!
@@ -25,6 +38,8 @@ const typeDefs = gql`
   }
 
   type Mutation {
+    login(username: String!, password: String!): Token
+    createUser(username: String!, email: String!, password: String!): User
     createTodo(title: String!, description: String, priority: String): Todo!
     editTodo(
       id: ID!
@@ -40,7 +55,46 @@ const resolvers = {
     todos: async () => await TodoModel.find({}),
   },
   Mutation: {
-    createTodo: async (_: any, args: Todo) => {
+    login: async (_: any, args: { username: string; password: string }) => {
+      const user = await UserModel.findOne({ username: args.username })
+      if (!user)
+        throw new GraphQLError('Authentication failed', {
+          extensions: {
+            code: 'BAD_USER_INPUT',
+          },
+        })
+
+      const isUser = await user.comparePassword(args.password)
+      if (!isUser)
+        throw new GraphQLError('Authentication failed', {
+          extensions: {
+            code: 'BAD_USER_INPUT',
+          },
+        })
+
+      const userForToken = {
+        id: user._id,
+        username: user.username,
+      }
+
+      return { value: jwt.sign(userForToken, process.env.JWT_SECRET as string) }
+    },
+    createUser: async (_: any, args: UserInput) => {
+      const user = new UserModel({ ...args })
+
+      try {
+        await user.save()
+      } catch (error) {
+        throw new GraphQLError('Failed to save user.', {
+          extensions: {
+            error,
+          },
+        })
+      }
+
+      return user
+    },
+    createTodo: async (_: any, args: TodoInput) => {
       const todo = new TodoModel({ ...args })
       try {
         await todo.save()
@@ -56,10 +110,10 @@ const resolvers = {
     editTodo: async (
       _: any,
       args: {
-        id: String
-        title?: String
-        description?: String
-        priority?: String
+        id: string
+        title?: string
+        description?: string
+        priority?: string
       }
     ) => {
       const todo = await TodoModel.findById(args.id)
