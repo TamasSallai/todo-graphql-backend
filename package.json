@@ -16,12 +16,15 @@
     "dotenv": "^16.0.3",
     "graphql": "^16.6.0",
     "graphql-tag": "^2.12.6",
+    "graphql-tools": "^8.3.19",
     "jsonwebtoken": "^9.0.0",
+    "lodash.merge": "^4.6.2",
     "mongoose": "^7.0.3"
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.0",
     "@types/jsonwebtoken": "^9.0.1",
+    "@types/lodash.merge": "^4.6.7",
     "nodemon": "^2.0.22",
     "typescript": "^5.0.2"
   }
